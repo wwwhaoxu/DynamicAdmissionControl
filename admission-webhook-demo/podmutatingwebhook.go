@@ -8,8 +8,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"k8s.io/klog/v2"
 	"net/http"
+	"os"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
@@ -41,23 +41,23 @@ func (p *podMutate) Handle(ctx context.Context, req admission.Request) admission
 	// Load the Envoy Initializer configuration from a Kubernetes ConfigMap.
 	cm, err := clientset.CoreV1().ConfigMaps(namespace).Get(ctx, configmap, metav1.GetOptions{})
 	if err != nil {
-		klog.Fatal()
+		podMutateLog.Error(err, "get configmap resource failed")
+		os.Exit(1)
 	}
 
 	c, err := configmapToConfig(cm)
 	if err != nil {
-		klog.Fatal(err)
+		podMutateLog.Error(err, "failed decoder configmap")
+		os.Exit(1)
 	}
 
 	pod := &corev1.Pod{}
-	//initializePod := runtime.DeepCopyJSONValue(pod)
 
 	err = p.decode.Decode(req, pod)
 	if err != nil {
 		podMutateLog.Error(err, "failed decoder pod")
 		return admission.Errored(http.StatusBadRequest, err)
 	}
-	//initializedPod := initializePod.(*corev1.Pod)
 
 	pod.Spec.Containers = append(pod.Spec.Containers, c.Containers...)
 	pod.Spec.Volumes = append(pod.Spec.Volumes, c.Volumes...)
